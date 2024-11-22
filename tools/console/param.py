@@ -4,6 +4,7 @@ from typing import Callable,Optional, Any
 class Param:
     def __init__(
             self,
+            *,
             description: str,
             action: Callable[..., Any],
             modify: bool = True,

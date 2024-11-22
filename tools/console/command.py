@@ -42,44 +42,6 @@ class Command:
         self.accepts_optional_args = accepts_optional_args
         self.params = params if params else None
 
-    def _get_used_params(self, *args: str) -> tuple[int, list[tuple[Param, Optional[list[Any]]]]] | Text | None:
-        if not self.params:
-            return 0, []
-
-        used_params = []
-        i = 0
-        while len(args) > i:
-            param_obj = self.params.get(args[i])
-            if not param_obj:
-                break
-
-            if not param_obj.arg_types:
-                used_params.append((param_obj, None))
-                i += 1
-                continue
-
-            start_param_args = i + 1
-            end_param_args = start_param_args + len(param_obj.arg_types)
-            if len(args) < end_param_args:
-                return Text(f"Error: Not enough args for param {args[i]}. Usage: {param_obj.usage}. "
-                            f"Expected types: {[t.__name__ for t in param_obj.arg_types]}", style="red")
-
-            param_args: list[str] = [param_arg for param_arg in args[start_param_args:end_param_args]]
-            try:
-                typed_param_args = [arg_type(param_arg) for param_arg, arg_type in zip(param_args, param_obj.arg_types)]
-            except ValueError as e:
-                return Text(f"Error: {e}. Usage: {param_obj.usage}. "
-                            f"Expected types: {[t.__name__ for t in param_obj.arg_types]}", style="red")
-
-            used_params.append((
-                param_obj,
-                typed_param_args
-            ))
-
-            i += 1 + len(param_obj.arg_types)
-
-        return i, used_params
-
     def _get_typed_args(self, *args: str) -> list[Any] | ValueError:
         if not self.accepts_varargs:
             typed_args = [arg_type(arg) for arg, arg_type in zip(args, self.arg_types)]
