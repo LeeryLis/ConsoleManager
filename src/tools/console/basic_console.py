@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from tools.console import ConsoleManager
+from src.tools.console import ConsoleManager
 
 class BasicConsole(ABC):
     """

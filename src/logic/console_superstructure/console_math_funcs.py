@@ -1,7 +1,7 @@
-from tools.console import BasicConsole
-from tools.console import ConsoleManager, Command, Param
+from src.tools.console import BasicConsole
+from src.tools.console import ConsoleManager, Command, Param
 
-from logic import MathFuncs
+from src.logic import MathFuncs
 
 from rich.text import Text
 

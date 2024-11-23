@@ -1,5 +1,5 @@
-from logic import ConsoleMathFuncs
-from logic import MathFuncs
+from src.logic import ConsoleMathFuncs
+from src.logic import MathFuncs
 
 
 def main():
