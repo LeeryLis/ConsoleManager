@@ -5,8 +5,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from src.tools.console import Param
-from src.tools.console import Command
+from src.tools.console import Command, Param
 
 class ConsoleManager:
     def __init__(self, name: str) -> None:
