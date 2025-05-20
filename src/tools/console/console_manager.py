@@ -1,45 +1,42 @@
-from typing import Any
-
 import shlex
+from typing import Callable, Any
+
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from src.tools.console import Command, Param
+from src.tools.console import Command, Param, ParamType
+
 
 class ConsoleManager:
     def __init__(self, name: str) -> None:
         self.name = name
         self.is_running = True
         self.commands: dict[str, Command] = {}
-        self.register_command(Command(
-            aliases=["h", "help"],
-            description="Show help",
-            action=self._print_help,
-            usage="help [param] [command] [command param]",
-            arg_types=[str, str],
-            accepts_optional_args=True,
-            params={
-                "-p": Param(
-                    description="Show help for all params of chosen command",
-                    action=self._print_help_all_params,
-                    arg_types=[str],
-                    usage="-p <command>",
-                    execute_command_action=False,
-                    return_result=True
-                )
-            }
-        ))
-        self.register_command(Command(
-            aliases=["s", "stop"],
-            description="Stop this console manager",
-            action=self.stop))
 
         self.console = Console()
 
-    def register_command(self, command: Command) -> None:
-        for alias in command.aliases:
-            self.commands[alias] = command
+        self.register_command(
+            self.stop,
+            ["s", "stop"],
+            "Stop this console manager",
+            print_result=False
+        )
+        self.register_command(
+            self._print_help,
+            ["h", "help"],
+            "Show help",
+            "help [command]",
+            params={
+                "-p": Param(
+                    action=self._print_help_all_params,
+                    description="Show help for all params of chosen command",
+                    usage="-p <command>",
+                    param_type=ParamType.LOGIC,
+                    arg_number=1
+                )
+            }
+        )
 
     def _get_help_aliases(self) -> str:
         for command in self.commands.values():
@@ -68,7 +65,7 @@ class ConsoleManager:
             table.add_row(alias, description, usage_text)
         return table
 
-    def _print_help(self, *args: str) -> Table | list[Text] | Text:
+    def _print_help(self, *args: str) -> Table | Text:
         def print_help_for_all() -> Table:
             table = Table(title="Available commands", show_lines=True)
             table.add_column("Aliases", style="cyan")
@@ -90,7 +87,7 @@ class ConsoleManager:
             return table
 
         def print_help_for_command() -> Text | list[Text]:
-            result = []
+            result = Text()
 
             command_name = args[0]
             helped_command = self.commands.get(command_name)
@@ -99,16 +96,16 @@ class ConsoleManager:
                 return Text(f"No such command: {command_name}", style="red")
 
             aliases = ", ".join(helped_command.aliases)
-            result.append(Text("Command:", style="cyan"))
-            result.append(Text(f"{aliases}"))
+            result.append("Command:", style="cyan")
+            result.append(f"{aliases}")
 
             if helped_command.description:
-                result.append(Text("\nDescription:", style="magenta"))
-                result.append(Text(f"{helped_command.description}"))
+                result.append("\nDescription:", style="magenta")
+                result.append(f"{helped_command.description}")
 
             if helped_command.usage:
-                result.append(Text("\nUsage:", style="green"))
-                result.append(Text(f"{helped_command.usage}"))
+                result.append("\nUsage:", style="green")
+                result.append(f"{helped_command.usage}")
 
             if helped_command.params:
                 result.append(Text("\nParams:", style="yellow"))
@@ -132,17 +129,21 @@ class ConsoleManager:
             if not param:
                 return Text(f"The command {command_name} has no such param: {param_name}", style="red")
 
-            result = []
+            result = Text()
 
             aliases = ", ".join(helped_command.aliases)
-            result.append(Text("Command:", style="cyan"))
-            result.append(Text(f"{aliases}"))
+            result.append("Command: ", style="cyan")
+            result.append(f"{aliases}")
 
-            result.append(Text("\nParam:", style="yellow"))
-            result.append(Text(f"{param_name}"))
+            result.append("\nParam: ", style="yellow")
+            result.append(f"{param_name}")
 
-            result.append(Text("\nDescription:", style="magenta"))
-            result.append(Text(f"{param.description}"))
+            result.append("\nDescription: ", style="magenta")
+            result.append(f"{param.description}")
+
+            if param.usage:
+                result.append("\nUsage: ", style="green")
+                result.append(f"{param.usage}")
 
             return result
 
@@ -155,17 +156,23 @@ class ConsoleManager:
         else:
             return Text("Too much arguments.", style="red")
 
+    def register_command(
+            self,
+            action: Callable[..., Any],
+            aliases: list[str],
+            description: str,
+            usage: str = "",
+            print_result: bool = True,
+            params: dict[str, Param] = None
+    ) -> None:
+        command = Command(
+            action=action, aliases=aliases, description=description,
+            usage=usage, print_result=print_result, params=params)
+        for alias in aliases:
+            self.commands[alias] = command
+
     def stop(self) -> None:
         self.is_running = False
-
-    def _verify_args(self, command_obj: Command, args: Any) -> bool:
-        if not command_obj.arg_types:
-            return True
-
-        if command_obj.accepts_varargs:
-            return len(args) >= len(command_obj.arg_types)
-
-        return command_obj.accepts_optional_args or len(args) == len(command_obj.arg_types)
 
     def run(self) -> None:
         self.is_running = True
@@ -183,19 +190,6 @@ class ConsoleManager:
                 )
                 continue
 
-            if not self._verify_args(command_obj, args):
-                self.console.print(
-                    Text("Usage:", style="green"),
-                    Text(f"{command_obj.usage}")
-                )
-                continue
-
             result = command_obj.execute(*args)
-            unpack = False
-            if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], bool):
-                result, unpack = result
-            if result:
-                if unpack or isinstance(result, list | tuple) and all([isinstance(elem, Text | Table) for elem in result]):
-                    self.console.print(*result)
-                else:
-                    self.console.print(result)
+            if command_obj.print_result:
+                self.console.print(result)
