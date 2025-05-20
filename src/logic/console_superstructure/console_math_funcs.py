@@ -35,25 +35,29 @@ class ConsoleMathFuncs(BasicConsole):
                     description="Отфильтровать: по нижней границе",
                     action=lambda lb, *numbers: list(filter(lambda n: n >= lb, numbers)),
                     usage="-lb <lower bound>",
-                    param_type=ParamType.ARG_MODIFY
+                    param_type=ParamType.ARG_MODIFY,
+                    arg_number=1
                 ),
                 "-ub": Param(
                     description="Отфильтровать: по верхней границе",
                     action=lambda ub, *numbers: list(filter(lambda n: n <= ub, numbers)),
                     usage="-ub <upper bound>",
-                    param_type=ParamType.ARG_MODIFY
+                    param_type=ParamType.ARG_MODIFY,
+                    arg_number=1
                 ),
                 "-b": Param(
                     description="Отфильтровать: по нижней и верхней границе",
                     action=lambda lb, ub, *numbers: list(filter(lambda n: lb <= n <= ub, numbers)),
                     usage="-b <lower bound> <upper bound>",
-                    param_type=ParamType.ARG_MODIFY
+                    param_type=ParamType.ARG_MODIFY,
+                    arg_number=2
                 ),
                 "-text": Param(
                     description="Добавить текст в вывод",
                     action=lambda title: Text(title.replace("\\n", "\n")),
                     usage="-text <text>",
-                    param_type=ParamType.NO_MODIFY
+                    param_type=ParamType.NO_MODIFY,
+                    arg_number=1
                 ),
                 "-sort": Param(
                     description="Отсортировать числа по возрастанию",
