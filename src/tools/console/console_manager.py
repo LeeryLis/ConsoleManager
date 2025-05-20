@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from src.tools.console import Command, Param, ParamType
+from tools.console import Command, Param, ParamType
 
 
 class ConsoleManager:
@@ -26,12 +26,12 @@ class ConsoleManager:
             self._print_help,
             ["h", "help"],
             "Show help",
-            "help [command]",
+            "help [command] [param]",
             params={
                 "-p": Param(
                     action=self._print_help_all_params,
                     description="Show help for all params of chosen command",
-                    usage="-p <command>",
+                    usage="help -p <command>",
                     param_type=ParamType.LOGIC,
                     arg_number=1
                 )
@@ -96,19 +96,19 @@ class ConsoleManager:
                 return Text(f"No such command: {command_name}", style="red")
 
             aliases = ", ".join(helped_command.aliases)
-            result.append("Command:", style="cyan")
+            result.append("Command: ", style="cyan")
             result.append(f"{aliases}")
 
             if helped_command.description:
-                result.append("\nDescription:", style="magenta")
+                result.append("\nDescription: ", style="magenta")
                 result.append(f"{helped_command.description}")
 
             if helped_command.usage:
-                result.append("\nUsage:", style="green")
+                result.append("\nUsage: ", style="green")
                 result.append(f"{helped_command.usage}")
 
             if helped_command.params:
-                result.append(Text("\nParams:", style="yellow"))
+                result.append(Text("\nParams: ", style="yellow"))
                 result.append(Text(f"{', '.join(helped_command.params)}"))
 
             return result
