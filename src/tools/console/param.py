@@ -1,7 +1,8 @@
 import inspect
 from typing import Callable, Any, Sequence
-from src.tools.console.param_type import ParamType
+from tools.console.param_type import ParamType
 from rich.text import Text
+from rich.console import Console
 
 
 class Param:
@@ -14,20 +15,6 @@ class Param:
             usage: str = '',
             arg_number: int = 0
     ):
-        """
-        Параметр команды. Нужен для организации вариаций одной и той же команды или модификации переданных
-        в команду аргументов.
-        Имя параметра не представлено, так как это подчёркивает, что любой параметр
-        неразрывно связан со своей командой и должен храниться в собственном словаре команды.
-
-        :param action: Вызываемая параметром функция
-        :param description: Описание параметра для пользователя
-        :param param_type: Тип параметра. В файле param_type.py можно узнать подробнее о типах. Типы используются
-        для правильной организации порядка выполнения параметров
-        :param usage: Описание использования для пользователя
-        Например: "-lb <lower bound>", "-b <lower bound> <upper bound>"
-        :param arg_number: Используется для правильного получения требуемых аргументов
-        """
         self.action = action
         self.description = description
         self.usage = usage
@@ -36,6 +23,8 @@ class Param:
 
     def _get_argspec(self) -> tuple[inspect.FullArgSpec, list[str]]:
         argspec = inspect.getfullargspec(self.action)
+        if not argspec.args:
+            return argspec, []
         argspec_args = argspec.args[1:] if argspec.args[0] == 'self' else argspec.args
         return argspec, argspec_args
 
@@ -117,4 +106,5 @@ class Param:
             if self.usage:
                 result.append("Usage: ", style="green")
                 result.append(f"{self.usage}", style="white")
-            return result
+            Console().print(result)
+            return None
