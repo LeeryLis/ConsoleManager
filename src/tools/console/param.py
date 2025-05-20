@@ -1,6 +1,6 @@
 import inspect
 from typing import Callable, Any, Sequence
-from tools.console.param_type import ParamType
+from src.tools.console.param_type import ParamType
 from rich.text import Text
 from rich.console import Console
 
