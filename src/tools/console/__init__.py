@@ -1,11 +1,13 @@
-from .param import Param
 from .command import Command
+from .param import Param
+from .param_type import ParamType
 from .console_manager import ConsoleManager
 from .basic_console import BasicConsole
 
 __all__ = [
-    "ConsoleManager",
     "Command",
     "Param",
-    "BasicConsole"
+    "ParamType",
+    "ConsoleManager",
+    "BasicConsole",
 ]
