@@ -1,125 +1,169 @@
-from typing import Callable, Optional, Any
-from src.tools.console import Param
-
+import copy
+import inspect
+from typing import Callable, Any, Sequence
 from rich.text import Text
+from src.tools.console.param import Param
+from src.tools.console.param_type import ParamType
 
 
 class Command:
     def __init__(
             self,
             *,
+            action: Callable[..., Any],
             aliases: list[str],
             description: str,
-            action: Callable[..., Any],
-            usage: str = "",
-            arg_types: Optional[list[type]] = None,
-            accepts_varargs: bool = False,
-            accepts_optional_args: bool = False,
-            params: dict[str, Param] = None
+            usage: str,
+            print_result: bool,
+            params: dict[str, Param]
     ) -> None:
         """
+        :param action: Вызываемая функция
         :param aliases: "Имена" команды, по которым она вызывается в консоли
         :param description: Описание команды для пользователя
-        :param action: Вызываемая функция
         :param usage: Описание использования для пользователя
-        :param arg_types: Типы передаваемых в вызываемую функцию аргументов (соответствуют сигнатуре)
-        :param accepts_varargs: Включение произвольного числа аргументов
-        (Например: sum(*numbers: int) : sum 1, sum 1 2, sum 1 2 3)
-        :param accepts_optional_args: Включение необязательности наличия всех аргументов (функция может иметь разную
-        логику относительно числа переданных аргументов, как: help, help [command], help [command] [param])
-        Или: array(cols: int, rows: int = 1) - первый аргумент совершенно точно должен быть приведён к int,
-        а второй аргумент может не передаваться, чтобы использовать значение по умолчанию
+        :param print_result: Если True, то выводить результат на консоль
         :param params: Словарь параметров команды. Нужно для лёгкого добавления разной логики для одной и той же
         команды, как: print -all, print -names, print -zero. Или: sum 1 2 -10 >>> -7, sum -n 1 2 -10 >>> -10
         sum -p 1 2 -10 >>> 3
         """
+        self.action = action
         self.aliases = aliases
         self.description = description
-        self.action = action
         self.usage = usage
-        self.arg_types = arg_types if arg_types else []
-        self.accepts_varargs = accepts_varargs
-        self.accepts_optional_args = accepts_optional_args
-        self.params = params if params else None
+        self.print_result = print_result
+        self.params = params
 
-    def _get_typed_args(self, *args: str) -> list[Any] | ValueError:
-        if not self.accepts_varargs:
-            typed_args = [arg_type(arg) for arg, arg_type in zip(args, self.arg_types)]
-        else:
-            fixed_args = [arg_type(arg) for arg, arg_type in zip(args[:len(self.arg_types) - 1], self.arg_types)]
-            vararg_type = self.arg_types[-1]
-            varargs = [vararg_type(arg) for arg in args[len(self.arg_types) - 1:]]
+    def _get_argspec(self) -> tuple[inspect.FullArgSpec, list[str]]:
+        argspec = inspect.getfullargspec(self.action)
+        argspec_args = argspec.args[1:] if argspec.args[0] == 'self' else argspec.args
+        return argspec, argspec_args
 
-            typed_args = [*fixed_args, *varargs]
-
-        return typed_args
-
-    def execute(self, *args: str) -> Any:
-        if not args:
-            if not self.accepts_optional_args and self.arg_types:
-                return [Text(f"Usage:", style="green"), Text(f"{self.usage}")]
-            return self.action()
-
-        # Разбор переданных аргументов для нахождения параметров и их аргументов
-        used_params = []
-        i = 0
-        while len(args) > i and self.params:
-            param_obj = self.params.get(args[i])
-            if not param_obj:
-                break
-
-            if not param_obj.arg_types:
-                used_params.append((param_obj, None))
-                i += 1
-                continue
-
-            start_param_args = i + 1
-            end_param_args = start_param_args + len(param_obj.arg_types)
-            if len(args) < end_param_args:
-                return Text(f"Error: Not enough args for param {args[i]}. Usage: {param_obj.usage}. "
-                            f"Expected types: {[t.__name__ for t in param_obj.arg_types]}", style="red")
-
-            param_args: list[str] = [param_arg for param_arg in args[start_param_args:end_param_args]]
-            try:
-                typed_param_args = [arg_type(param_arg) for param_arg, arg_type in zip(param_args, param_obj.arg_types)]
-            except ValueError as e:
-                return Text(f"Error: {e}. Usage: {param_obj.usage}. "
-                            f"Expected types: {[t.__name__ for t in param_obj.arg_types]}", style="red")
-
-            used_params.append((
-                param_obj,
-                typed_param_args
-            ))
-
-            i += 1 + len(param_obj.arg_types)
-
-        start_args = i
-
-        try:
-            typed_args = self._get_typed_args(*args[start_args:])
-        except ValueError as e:
-            return Text(f"Error: {e}. Expected types: {[t.__name__ for t in self.arg_types]}", style="red")
-
-        if not used_params:
-            return self.action(*typed_args)
-
-        result = []
-        execute_command_action = True
-        actual_args = typed_args
-        for param, param_args in used_params:
-            execute_command_action = execute_command_action and param.execute_command_action
-
-            if param.use_command_args:
-                param_result = param.action(*param_args, *actual_args) if param_args else param.action(*actual_args)
+    @staticmethod
+    def _convert_positional_args(
+            args: Sequence[str], argspec: inspect.FullArgSpec, argspec_args: list[str]
+    ) -> tuple[list[Any], int]:
+        converted_args = []
+        args_index = 0
+        for arg_name in argspec_args:
+            if args_index < len(args):
+                arg = args[args_index]
+                annotation = argspec.annotations.get(arg_name, None)
+                if annotation:
+                    converted_arg = annotation(arg)
+                else:
+                    converted_arg = arg
+                converted_args.append(converted_arg)
+                args_index += 1
             else:
-                param_result = param.action(*param_args) if param_args else param.action()
+                if argspec.defaults and arg_name in argspec.args[-len(argspec.defaults):]:
+                    default_index = argspec.args.index(arg_name) - len(argspec.args) + len(argspec.defaults)
+                    converted_args.append(argspec.defaults[default_index])
+                else:
+                    raise TypeError(f"Не передан обязательный аргумент {arg_name}")
+        return converted_args, args_index
 
-            if param.modify:
-                actual_args = param_result
+    @staticmethod
+    def _convert_varargs(args: Sequence[str], argspec: inspect.FullArgSpec, args_index: int) -> list[Any]:
+        if argspec.varargs:
+            varargs_name = argspec.varargs
+            varargs_annotation = argspec.annotations.get(varargs_name, None)
+            if varargs_annotation:
+                converted_varargs = [varargs_annotation(arg) for arg in args[args_index:]]
+            else:
+                converted_varargs = args[args_index:]
+            return converted_varargs
+        else:
+            return []
 
-            if param.return_result:
-                result.append(param_result)
+    @staticmethod
+    def _convert_kwonlyargs(args: Sequence[str], argspec: inspect.FullArgSpec, args_index: int) -> list[Any]:
+        if argspec.kwonlyargs:
+            converted_args = []
+            for arg_name in argspec.kwonlyargs:
+                if args_index < len(args):
+                    arg = args[args_index]
+                    annotation = argspec.annotations.get(arg_name, None)
+                    if annotation:
+                        converted_arg = annotation(arg)
+                    else:
+                        converted_arg = arg
+                    converted_args.append(converted_arg)
+                    args_index += 1
+                else:
+                    if arg_name in argspec.kwonlydefaults:
+                        converted_args.append(argspec.kwonlydefaults[arg_name])
+                    else:
+                        raise TypeError(f"Не передан обязательный ключевой аргумент {arg_name}")
+            return converted_args
+        else:
+            return []
 
-        if execute_command_action:
-            result.append(self.action(*actual_args))
-        return result, True
+    def convert_args(self, args: Sequence[str]) -> list[Any]:
+        argspec, argspec_args = self._get_argspec()
+        converted_args, args_index = self._convert_positional_args(args, argspec, argspec_args)
+        converted_varargs = self._convert_varargs(args, argspec, args_index)
+        converted_kwonlyargs = self._convert_kwonlyargs(args, argspec, args_index)
+        converted_args.extend(converted_varargs)
+        converted_args.extend(converted_kwonlyargs)
+        return converted_args
+
+    def get_params(self, args: Sequence[str]
+                   ) -> tuple[dict[ParamType, list[tuple[Param, Sequence[str]]]], Sequence[str]]:
+        # Разбор переданных аргументов для нахождения параметров и их аргументов
+        used_params: dict[ParamType, list[tuple[Param, Sequence[str]]]] = {
+            ParamType.ARG_MODIFY: [], ParamType.RESULT_MODIFY: [],
+            ParamType.NO_MODIFY: [], ParamType.LOGIC: []}
+        new_args = list(copy.copy(args))
+        i = 0
+        while i < len(new_args):
+            arg = new_args[i]
+            if param := self.params.get(arg):
+                if param.arg_number > 0:
+                    param_args = new_args[i + 1:i + param.arg_number + 1]
+                    used_params[param.param_type].append((param, param_args))
+                    del new_args[i + 1:i + param.arg_number + 1]
+                else:
+                    used_params[param.param_type].append((param, ''))
+                del new_args[i]
+            else:
+                i += 1
+        return used_params, tuple(new_args)
+
+    def execute(self, *args) -> Any | Text:
+        try:
+            if not self.params:
+                return self.action(*self.convert_args(args)) if args else self.action()
+
+            used_params, args = self.get_params(args)
+            converted_args = args
+
+            # Параметры, изменяющие основную логику
+            if used_params[ParamType.LOGIC]:
+                result = None
+                for param, param_args in used_params[ParamType.LOGIC]:
+                    result = param.execute(*param_args, *converted_args)
+                return result
+            else:
+                converted_args = self.convert_args(args)
+
+            # Параметры, модифицирующие переданные аргументы
+            for param, param_args in used_params[ParamType.ARG_MODIFY]:
+                converted_args = param.execute(*param_args, *converted_args)
+
+            result = self.action(*converted_args)
+
+            # Параметры, модифицирующие результат
+            for param, param_args in used_params[ParamType.RESULT_MODIFY]:
+                result = param.execute(*param_args, result)
+
+            # Параметры, ничего не модифицирующие
+            for param, param_args in used_params[ParamType.NO_MODIFY]:
+                param.execute(*param_args, *converted_args)
+
+            return result
+        except (ValueError, TypeError) as ex:
+            result = Text(f"{ex}\n", style="red")
+            result.append("Usage: ", style="green")
+            result.append(f"{self.usage}", style="white")
+            return result
