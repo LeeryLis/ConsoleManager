@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from tools.console import Command, Param, ParamType
+from src.tools.console import Command, Param, ParamType
 
 
 class ConsoleManager:
