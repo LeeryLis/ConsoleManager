@@ -2,6 +2,7 @@ import copy
 import inspect
 from typing import Callable, Any, Sequence
 from rich.text import Text
+from rich.console import Console
 from src.tools.console.param import Param
 from src.tools.console.param_type import ParamType
 
@@ -17,16 +18,6 @@ class Command:
             print_result: bool,
             params: dict[str, Param]
     ) -> None:
-        """
-        :param action: Вызываемая функция
-        :param aliases: "Имена" команды, по которым она вызывается в консоли
-        :param description: Описание команды для пользователя
-        :param usage: Описание использования для пользователя
-        :param print_result: Если True, то выводить результат на консоль
-        :param params: Словарь параметров команды. Нужно для лёгкого добавления разной логики для одной и той же
-        команды, как: print -all, print -names, print -zero. Или: sum 1 2 -10 >>> -7, sum -n 1 2 -10 >>> -10
-        sum -p 1 2 -10 >>> 3
-        """
         self.action = action
         self.aliases = aliases
         self.description = description
@@ -36,6 +27,8 @@ class Command:
 
     def _get_argspec(self) -> tuple[inspect.FullArgSpec, list[str]]:
         argspec = inspect.getfullargspec(self.action)
+        if not argspec.args:
+            return argspec, []
         argspec_args = argspec.args[1:] if argspec.args[0] == 'self' else argspec.args
         return argspec, argspec_args
 
@@ -130,7 +123,7 @@ class Command:
                 i += 1
         return used_params, tuple(new_args)
 
-    def execute(self, *args) -> Any | Text:
+    def execute(self, *args) -> Any:
         try:
             if not self.params:
                 return self.action(*self.convert_args(args)) if args else self.action()
@@ -138,20 +131,20 @@ class Command:
             used_params, args = self.get_params(args)
             converted_args = args
 
-            # Параметры, изменяющие основную логику
-            if used_params[ParamType.LOGIC]:
-                result = None
-                for param, param_args in used_params[ParamType.LOGIC]:
-                    result = param.execute(*param_args, *converted_args)
-                return result
-            else:
+            if not used_params[ParamType.LOGIC]:
                 converted_args = self.convert_args(args)
 
             # Параметры, модифицирующие переданные аргументы
             for param, param_args in used_params[ParamType.ARG_MODIFY]:
                 converted_args = param.execute(*param_args, *converted_args)
 
-            result = self.action(*converted_args)
+            # Параметры, изменяющие основную логику
+            result = None
+            if used_params[ParamType.LOGIC]:
+                for param, param_args in used_params[ParamType.LOGIC]:
+                    result = param.execute(*param_args, *converted_args)
+            else:
+                result = self.action(*converted_args)
 
             # Параметры, модифицирующие результат
             for param, param_args in used_params[ParamType.RESULT_MODIFY]:
@@ -166,4 +159,5 @@ class Command:
             result = Text(f"{ex}\n", style="red")
             result.append("Usage: ", style="green")
             result.append(f"{self.usage}", style="white")
-            return result
+            Console().print(result)
+            return None
