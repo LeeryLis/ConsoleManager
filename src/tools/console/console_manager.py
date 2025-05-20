@@ -191,5 +191,5 @@ class ConsoleManager:
                 continue
 
             result = command_obj.execute(*args)
-            if command_obj.print_result:
+            if command_obj.print_result and result:
                 self.console.print(result)
